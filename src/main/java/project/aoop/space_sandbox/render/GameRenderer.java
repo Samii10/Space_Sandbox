@@ -28,22 +28,24 @@ public class GameRenderer {
     // Last mouse position — stored for map click handling
     private double lastMouseX, lastMouseY;
 
+    private Runnable restartAction;
+
     private final GameCamera               camera;
     private final StarfieldRenderer        starfieldRenderer;
     private final ShipRenderer             shipRenderer;
     private final PlanetRenderer           planetRenderer;
     private final MinimapRenderer          minimapRenderer;
-    private final HUDRenderer             hudRenderer;
-    private final SolarSystemMap          solarSystemMap;
+    private final HUDRenderer              hudRenderer;
+    private final SolarSystemMap           solarSystemMap;
     private final ProceduralPlanetRenderer proceduralRenderer;
-    private final BulletRenderer          bulletRenderer;
+    private final BulletRenderer           bulletRenderer;
     private final NavigationService        navigationService;
     private final LevelService             levelService;
     private final CombatService            combatService;
     private final Star                     star;
     private final List<Planet>             planets;
-    private final AsteroidRenderer        asteroidRenderer;
-    private final AsteroidWarningRenderer asteroidWarningRenderer;
+    private final AsteroidRenderer         asteroidRenderer;
+    private final AsteroidWarningRenderer  asteroidWarningRenderer;
 
     public GameRenderer(GameCamera camera, StarfieldRenderer starfieldRenderer,
                         ShipRenderer shipRenderer, PlanetRenderer planetRenderer,
@@ -57,22 +59,22 @@ public class GameRenderer {
                         AsteroidRenderer asteroidRenderer,
                         AsteroidWarningRenderer asteroidWarningRenderer,
                         Star star, List<Planet> planets) {
-        this.camera             = camera;
-        this.starfieldRenderer  = starfieldRenderer;
-        this.shipRenderer       = shipRenderer;
-        this.planetRenderer     = planetRenderer;
-        this.minimapRenderer    = minimapRenderer;
-        this.hudRenderer        = hudRenderer;
-        this.solarSystemMap     = solarSystemMap;
-        this.proceduralRenderer = proceduralRenderer;
-        this.bulletRenderer     = bulletRenderer;
-        this.navigationService  = navigationService;
-        this.levelService       = levelService;
-        this.combatService      = combatService;
-        this.star               = star;
-        this.asteroidRenderer   = asteroidRenderer;
+        this.camera                  = camera;
+        this.starfieldRenderer       = starfieldRenderer;
+        this.shipRenderer            = shipRenderer;
+        this.planetRenderer          = planetRenderer;
+        this.minimapRenderer         = minimapRenderer;
+        this.hudRenderer             = hudRenderer;
+        this.solarSystemMap          = solarSystemMap;
+        this.proceduralRenderer      = proceduralRenderer;
+        this.bulletRenderer          = bulletRenderer;
+        this.navigationService       = navigationService;
+        this.levelService            = levelService;
+        this.combatService           = combatService;
+        this.star                    = star;
+        this.asteroidRenderer        = asteroidRenderer;
         this.asteroidWarningRenderer = asteroidWarningRenderer;
-        this.planets            = planets;
+        this.planets                 = planets;
     }
 
     @PostConstruct
@@ -86,10 +88,37 @@ public class GameRenderer {
         this.gc     = canvas.getGraphicsContext2D();
     }
 
+    // ── Restart ──────────────────────────────────────────────────────────
+
+    /** Launcher/main class theke set koro: ship, asteroid, level reset-er code */
+    public void setRestartAction(Runnable r) { this.restartAction = r; }
+
+    /** R key press-e call koro. true mane restart hoyeche */
+    public boolean onKeyR() {
+        if (asteroidWarningRenderer.isRestartButtonVisible()) {
+            doRestart();
+            return true;
+        }
+        return false;
+    }
+
+    private void doRestart() {
+        if (restartAction != null) restartAction.run();
+        asteroidWarningRenderer.resetAnimation();
+        solarSystemMap.close();
+    }
+
     // Called by JavaFXLauncher on mouse release
-    // Only handles map/minimap — shooting is handled by InputHandler
+    // Handles restart button, map and minimap — shooting is handled by InputHandler
     public void handleClick(double x, double y) {
         if (canvas == null) return;
+
+        // ship mara gele RESTART button click
+        if (asteroidWarningRenderer.isRestartButtonHit(x, y)) {
+            doRestart();
+            return;
+        }
+
         double w = canvas.getWidth(), h = canvas.getHeight();
 
         if (solarSystemMap.isOpen()) {
@@ -98,7 +127,6 @@ public class GameRenderer {
             solarSystemMap.open();
         }
     }
-
     public void render(Ship ship, boolean thrusting) {
         if (gc == null) return;
         double w = canvas.getWidth(), h = canvas.getHeight();
@@ -110,6 +138,8 @@ public class GameRenderer {
         planets.forEach(p -> drawPlanetGravityZone(gc, p, ship));
         drawSunGravityZone(gc, ship);
         proceduralRenderer.drawSun(gc, star);
+        // Kuiper belt
+        proceduralRenderer.drawKuiperBelt(gc, star, planets, System.nanoTime() / 1e9);
         planets.forEach(p -> proceduralRenderer.drawPlanet(gc, p));
         asteroidRenderer.render(gc);
         bulletRenderer.render(gc, combatService.getBullets()); // bullets behind ship
@@ -123,7 +153,6 @@ public class GameRenderer {
         asteroidWarningRenderer.render(gc, ship);
     }
 
-    // ── Planet zones — color by status ───────────────────────────────────────
     private void drawPlanetGravityZone(GraphicsContext gc, Planet p, Ship ship) {
         double sx = camera.toScreenX(p.getX());
         double sy = camera.toScreenY(p.getY());
@@ -137,8 +166,6 @@ public class GameRenderer {
         String name = p.getName();
 
         if (levelService.isMastered(name)) {
-            // Mastered — white, very faint, dashed
-            // Shows history without being distracting
             gc.setStroke(Color.color(1, 1, 1, inside ? 0.35 : 0.08));
             gc.setLineWidth(1.0);
             gc.setLineDashes(4);
@@ -146,7 +173,6 @@ public class GameRenderer {
             gc.setLineDashes(0);
 
         } else if (levelService.isGravityActive(name)) {
-            // Current level — blue, solid when inside
             gc.setStroke(inside
                     ? Color.color(0.3, 0.7, 1.0, 0.85)
                     : Color.color(0.3, 0.7, 1.0, 0.25));
@@ -155,7 +181,6 @@ public class GameRenderer {
             gc.strokeOval(sx - r, sy - r, r*2, r*2);
             gc.setLineDashes(0);
 
-            // Inner pulse ring when inside
             if (inside) {
                 gc.setStroke(Color.color(0.3, 0.7, 1.0, 0.12));
                 gc.setLineWidth(6);
@@ -163,23 +188,17 @@ public class GameRenderer {
             }
 
         } else if (levelService.isLocked(name)) {
-            // Locked — red, warning, pulsing when inside
             if (inside) {
-                // Pulsing danger effect
-                double pulse = 0.5 + 0.5 * Math.sin(
-                        System.currentTimeMillis() * 0.008);
+                double pulse = 0.5 + 0.5 * Math.sin(System.currentTimeMillis() * 0.008);
 
-                // Thick pulsing outer ring
                 gc.setStroke(Color.color(1, 0.1, 0.1, 0.15 + pulse * 0.3));
                 gc.setLineWidth(10);
                 gc.strokeOval(sx - r, sy - r, r*2, r*2);
 
-                // Sharp inner ring
                 gc.setStroke(Color.color(1, 0.2, 0.2, 0.8));
                 gc.setLineWidth(2);
                 gc.strokeOval(sx - r, sy - r, r*2, r*2);
 
-                // DANGER label near the planet
                 double labelX = camera.toScreenX(p.getX());
                 double labelY = camera.toScreenY(p.getY())
                         - p.getRadius() * camera.getZoom() - 18;
@@ -191,7 +210,6 @@ public class GameRenderer {
                 gc.setTextAlign(javafx.scene.text.TextAlignment.LEFT);
 
             } else {
-                // Outside — subtle red dashed ring, visible as warning
                 gc.setStroke(Color.color(1, 0.2, 0.2, 0.18));
                 gc.setLineWidth(1.0);
                 gc.setLineDashes(5);

@@ -2,8 +2,13 @@ package project.aoop.space_sandbox.render;
 
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.paint.Color;
+import javafx.scene.paint.CycleMethod;
+import javafx.scene.paint.LinearGradient;
+import javafx.scene.paint.RadialGradient;
+import javafx.scene.paint.Stop;
 import javafx.scene.text.Font;
 import javafx.scene.text.FontWeight;
+import javafx.scene.text.Text;
 import javafx.scene.text.TextAlignment;
 import org.springframework.stereotype.Component;
 import project.aoop.space_sandbox.camera.GameCamera;
@@ -13,10 +18,13 @@ import project.aoop.space_sandbox.entity.ShipGeometry;
 import project.aoop.space_sandbox.service.LevelService;
 import project.aoop.space_sandbox.service.NavigationService;
 
+import java.util.ArrayList;
 import java.util.List;
 
 @Component
 public class HUDRenderer {
+
+    private static final Color ACCENT = Color.web("#4dffc8");
 
     private final GameCamera       camera;
     private final LevelService     levelService;
@@ -35,32 +43,108 @@ public class HUDRenderer {
         drawSpeedBar(gc, ship);
     }
 
+    // ── helpers ────────────────────────────────────────────────────────────
+
+    private double textWidth(String s, Font f) {
+        Text t = new Text(s);
+        t.setFont(f);
+        return t.getLayoutBounds().getWidth();
+    }
+
+    private void drawCorner(GraphicsContext gc, double x, double y, double dx, double dy, double len) {
+        gc.strokeLine(x, y, x + dx * len, y);
+        gc.strokeLine(x, y, x, y + dy * len);
+    }
+
+    // Planet name gulo panel-er width onujayi line-e bhag kore
+    private List<String> wrapNames(List<String> names, Font f, double maxW) {
+        List<String> lines = new ArrayList<>();
+        StringBuilder cur = new StringBuilder();
+        for (String n : names) {
+            String test = cur.length() == 0 ? n : cur + "  " + n;
+            if (textWidth(test, f) > maxW && cur.length() > 0) {
+                lines.add(cur.toString());
+                cur = new StringBuilder(n);
+            } else {
+                cur = new StringBuilder(test);
+            }
+        }
+        if (cur.length() > 0) lines.add(cur.toString());
+        return lines;
+    }
+
+    // ── Level panel (top-left) ─────────────────────────────────────────────
+
     private void drawLevelPanel(GraphicsContext gc) {
-        double h = levelService.hasLaser() ? 95 : 78;
+        double x = 14, y = 14, pw = 240;
 
-        gc.setFill(Color.color(0, 0, 0, 0.65));
-        gc.fillRoundRect(12, 12, 200, h, 8, 8);
-        gc.setStroke(Color.color(1, 1, 1, 0.08));
+        Font listFont = Font.font("Courier New", 10);
+        List<String> lines = wrapNames(
+                new ArrayList<>(levelService.getAccessiblePlanets()), listFont, pw - 32);
+
+        double ph = 66 + lines.size() * 14 + (levelService.hasLaser() ? 22 : 8);
+
+        // background + soft glow
+        gc.setFill(Color.color(0, 0, 0.05, 0.82));
+        gc.fillRoundRect(x, y, pw, ph, 14, 14);
+
+        RadialGradient glow = new RadialGradient(0, 0, x + 40, y + 30, pw * 0.8, false,
+                CycleMethod.NO_CYCLE,
+                new Stop(0.0, Color.color(0.08, 0.2, 0.25, 0.45)),
+                new Stop(1.0, Color.color(0, 0, 0, 0)));
+        gc.setFill(glow);
+        gc.fillRoundRect(x, y, pw, ph, 14, 14);
+
+        // border + teal corner brackets
+        gc.setStroke(Color.color(1, 1, 1, 0.10));
         gc.setLineWidth(1);
-        gc.strokeRoundRect(12, 12, 200, h, 8, 8);
+        gc.strokeRoundRect(x, y, pw, ph, 14, 14);
 
-        gc.setFont(Font.font("Courier New", 10));
-        gc.setFill(Color.color(1, 1, 1, 0.3));
-        gc.fillText("── SHIP LEVEL ──", 22, 30);
+        gc.setStroke(Color.color(0.3, 1, 0.8, 0.6));
+        gc.setLineWidth(1.5);
+        drawCorner(gc, x + 6,      y + 6,      1,  1, 12);
+        drawCorner(gc, x + pw - 6, y + ph - 6, -1, -1, 12);
 
-        gc.setFont(Font.font("Courier New", FontWeight.BOLD, 20));
-        gc.setFill(Color.web("#4dffc8"));
-        gc.fillText("LEVEL " + levelService.getLevel(), 22, 54);
+        // small heading
+        gc.setTextAlign(TextAlignment.LEFT);
+        gc.setFont(Font.font("Courier New", 9));
+        gc.setFill(Color.color(1, 1, 1, 0.35));
+        gc.fillText("SHIP LEVEL", x + 18, y + 24);
 
-        gc.setFont(Font.font("Courier New", 10));
-        gc.setFill(Color.color(1, 1, 1, 0.4));
-        gc.fillText(String.join("  ", levelService.getAccessiblePlanets()), 22, 70);
+        // big level text
+        Font lvlFont = Font.font("Courier New", FontWeight.BOLD, 24);
+        String lvl = "LEVEL " + levelService.getLevel();
+        gc.setFont(lvlFont);
+        gc.setFill(ACCENT);
+        gc.fillText(lvl, x + 18, y + 50);
+
+        // fading accent underline
+        double uw = Math.max(textWidth(lvl, lvlFont), 90);
+        LinearGradient line = new LinearGradient(x + 18, 0, x + 18 + uw, 0, false,
+                CycleMethod.NO_CYCLE,
+                new Stop(0.0, Color.color(0.3, 1, 0.8, 0.8)),
+                new Stop(1.0, Color.color(0.3, 1, 0.8, 0)));
+        gc.setStroke(line);
+        gc.setLineWidth(1.5);
+        gc.strokeLine(x + 18, y + 57, x + 18 + uw, y + 57);
+
+        // unlocked planets
+        gc.setFont(listFont);
+        gc.setFill(Color.color(0.7, 0.9, 1, 0.6));
+        double ly = y + 74;
+        for (String line1 : lines) {
+            gc.fillText(line1, x + 18, ly);
+            ly += 14;
+        }
 
         if (levelService.hasLaser()) {
-            gc.setFill(Color.web("#ff4444"));
-            gc.fillText("⚡ LASER UNLOCKED", 22, 86);
+            gc.setFill(Color.color(1, 0.27, 0.27, 0.9));
+            gc.setFont(Font.font("Courier New", FontWeight.BOLD, 10));
+            gc.fillText("⚡ LASER UNLOCKED", x + 18, ly + 4);
         }
     }
+
+    // ── Target arrow ───────────────────────────────────────────────────────
 
     private void drawTargetArrow(GraphicsContext gc, Ship ship, List<Planet> planets) {
         String targetName = navigationService.getTarget();
@@ -86,9 +170,13 @@ public class HUDRenderer {
         boolean visible = tsx + tr > 0 && tsx - tr < W && tsy + tr > 0 && tsy - tr < H;
 
         if (visible) {
-            // planet is on screen: ring around it
-            double pr = tr + 12;
-            gc.setStroke(Color.color(0.3, 1, 0.8, 0.5));
+            // planet is on screen: pulsing ring around it
+            double pulse = 0.5 + 0.5 * Math.sin(System.nanoTime() / 1e9 * 3);
+            double pr = tr + 12 + pulse * 3;
+            gc.setStroke(Color.color(0.3, 1, 0.8, 0.2));
+            gc.setLineWidth(6);
+            gc.strokeOval(tsx - pr, tsy - pr, pr * 2, pr * 2);
+            gc.setStroke(Color.color(0.3, 1, 0.8, 0.6));
             gc.setLineWidth(1.5);
             gc.strokeOval(tsx - pr, tsy - pr, pr * 2, pr * 2);
             return;
@@ -102,27 +190,47 @@ public class HUDRenderer {
         double ax = cx + Math.cos(angle) * ringDist;
         double ay = cy + Math.sin(angle) * ringDist;
 
+        // arrow glow
+        RadialGradient aGlow = new RadialGradient(0, 0, ax, ay, 22, false, CycleMethod.NO_CYCLE,
+                new Stop(0.0, Color.color(0.3, 1, 0.8, 0.35)),
+                new Stop(1.0, Color.color(0.3, 1, 0.8, 0)));
+        gc.setFill(aGlow);
+        gc.fillOval(ax - 22, ay - 22, 44, 44);
+
         gc.save();
         gc.translate(ax, ay);
         gc.rotate(Math.toDegrees(angle));
-        gc.setFill(Color.color(0.3, 1, 0.8, 0.9));
+        gc.setFill(Color.color(0.3, 1, 0.8, 0.95));
         gc.fillPolygon(new double[]{14, -6, -6}, new double[]{0, -5, 5}, 3);
         gc.setStroke(Color.color(0.3, 1, 0.8, 0.4));
         gc.setLineWidth(2);
         gc.strokeLine(-6, 0, -16, 0);
         gc.restore();
 
-        double lx = ax + Math.cos(angle) * 24;
-        double ly = ay + Math.sin(angle) * 24;
+        // label pill
+        double lx = ax + Math.cos(angle) * 40;
+        double ly = ay + Math.sin(angle) * 40;
+        Font nameFont = Font.font("Courier New", FontWeight.BOLD, 12);
+        String name = "→ " + target.getName();
+        double nw = textWidth(name, nameFont);
+
+        gc.setFill(Color.color(0, 0, 0.06, 0.55));
+        gc.fillRoundRect(lx - nw / 2 - 8, ly - 17, nw + 16, 32, 10, 10);
+        gc.setStroke(Color.color(0.3, 1, 0.8, 0.3));
+        gc.setLineWidth(1);
+        gc.strokeRoundRect(lx - nw / 2 - 8, ly - 17, nw + 16, 32, 10, 10);
+
         gc.setTextAlign(TextAlignment.CENTER);
-        gc.setFill(Color.color(0.3, 1, 0.8, 0.9));
-        gc.setFont(Font.font("Courier New", FontWeight.BOLD, 12));
-        gc.fillText("→ " + target.getName(), lx, ly - 5);
-        gc.setFill(Color.color(1, 1, 1, 0.5));
+        gc.setFill(Color.color(0.3, 1, 0.8, 0.95));
+        gc.setFont(nameFont);
+        gc.fillText(name, lx, ly - 3);
+        gc.setFill(Color.color(0.6, 0.85, 1, 0.6));
         gc.setFont(Font.font("Courier New", 10));
-        gc.fillText((int) dist + " u", lx, ly + 9);
+        gc.fillText((int) dist + " u", lx, ly + 10);
         gc.setTextAlign(TextAlignment.LEFT);
     }
+
+    // ── Lock warnings (same as before) ─────────────────────────────────────
 
     public void drawLockWarnings(GraphicsContext gc, Ship ship, List<Planet> planets) {
         for (Planet p : planets) {
@@ -222,16 +330,42 @@ public class HUDRenderer {
         }
     }
 
-    private void drawSpeedBar(GraphicsContext gc, Ship ship) {
-        double cx     = camera.getScreenW() / 2;
-        double bottom = camera.getScreenH() - 14;
+    // ── Speed bar (bottom center) ──────────────────────────────────────────
 
-        gc.setFill(Color.color(0, 0, 0, 0.5));
-        gc.fillRoundRect(cx - 80, bottom - 28, 160, 28, 6, 6);
-        gc.setFill(Color.color(1, 1, 1, 0.55));
-        gc.setFont(Font.font("Courier New", 12));
+    private void drawSpeedBar(GraphicsContext gc, Ship ship) {
+        double cx = camera.getScreenW() / 2;
+        double bw = 190, bh = 34;
+        double bx = cx - bw / 2;
+        double by = camera.getScreenH() - 16 - bh;
+
+        gc.setFill(Color.color(0, 0, 0.05, 0.8));
+        gc.fillRoundRect(bx, by, bw, bh, 17, 17);
+        gc.setStroke(Color.color(0.3, 1, 0.8, 0.35));
+        gc.setLineWidth(1);
+        gc.strokeRoundRect(bx, by, bw, bh, 17, 17);
+
+        // speed fill line along the bottom edge (max ~ 100 u/s)
+        double frac = Math.max(0, Math.min(1, ship.getSpeed() / 100.0));
+        double fw   = (bw - 30) * frac;
+        gc.setStroke(Color.color(0.3, 1, 0.8, 0.8));
+        gc.setLineWidth(2);
+        gc.strokeLine(bx + 15, by + bh - 4, bx + 15 + fw, by + bh - 4);
+
+        gc.setTextAlign(TextAlignment.LEFT);
+        gc.setFont(Font.font("Courier New", FontWeight.BOLD, 10));
+        gc.setFill(Color.color(1, 1, 1, 0.4));
+        gc.fillText("SPD", bx + 16, by + 20);
+
         gc.setTextAlign(TextAlignment.CENTER);
-        gc.fillText(String.format("SPD  %.2f  u/s", ship.getSpeed()), cx, bottom - 10);
+        gc.setFont(Font.font("Courier New", FontWeight.BOLD, 15));
+        gc.setFill(ACCENT);
+        gc.fillText(String.format("%.2f", ship.getSpeed()), cx + 4, by + 21);
+
+        gc.setTextAlign(TextAlignment.RIGHT);
+        gc.setFont(Font.font("Courier New", 10));
+        gc.setFill(Color.color(1, 1, 1, 0.4));
+        gc.fillText("u/s", bx + bw - 16, by + 20);
+
         gc.setTextAlign(TextAlignment.LEFT);
     }
 }

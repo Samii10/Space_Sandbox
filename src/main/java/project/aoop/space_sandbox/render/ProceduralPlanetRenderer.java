@@ -13,9 +13,10 @@ import project.aoop.space_sandbox.camera.GameCamera;
 import project.aoop.space_sandbox.entity.Planet;
 import project.aoop.space_sandbox.entity.Star;
 
+import java.util.List;
+import java.util.Random;
 @Component
 public class ProceduralPlanetRenderer {
-
     private static Color darken(Color c, double k) {
         return Color.color(c.getRed() * k, c.getGreen() * k, c.getBlue() * k, 1.0);
     }
@@ -25,12 +26,51 @@ public class ProceduralPlanetRenderer {
     }
 
 
-    private static final double SATURN_TILT = 19;
+    private static final double SATURN_TILT      = 0;
+    private static final double URANUS_RING_TILT = 0;
+    private static final double HAUMEA_TILT      = 0;
+
+    // ── Kuiper belt data  ──
+    private static final int    K_COUNT         = 3500;
+    private static final long   K_SEED          = 7L;
+    private static final double K_ANGULAR_SPEED = 0.02;
+    private static final double K_DOT_LIMIT_PX  = 2.4;
+    private static final Color  K_TINT          = Color.color(0.59, 0.71, 1.0, 0.05);
+
+    private static final Color[][] K_PALETTE = {
+            {Color.web("#d6deea"), Color.web("#98a6bd")},
+            {Color.web("#e9e3d6"), Color.web("#aaa291")},
+            {Color.web("#b9c6d9"), Color.web("#7f8fa8")},
+            {Color.web("#f1f4f9"), Color.web("#a5b2c6")},
+            {Color.web("#cdb8a6"), Color.web("#8e7a68")}
+    };
+
+
+    private static final String[] K_DWARF_NAME = {"Pluto", "Haumea", "Makemake", "Eris"};
+    private static final double[] K_DWARF_F    = {0.475, 0.655, 0.790, 1.90};
+    private static final double[] K_DWARF_A    = {0.6, 2.4, 4.0, 5.3};
+    private static final double[] K_DWARF_VIS  = {0.9, 0.7, 0.7, 0.95};
+    private static final double[][] K_MOON = {{1.9, 0.42, 0.9}, {1.6, 0.20, 1.3},
+            {1.7, 0.16, 1.1}, {1.8, 0.20, 0.8}};
+    private static final Color[] K_MOON_COLOR = {Color.web("#9d948c"), Color.web("#dfe6ee"),
+            Color.web("#6b5a50"), Color.web("#aeb3c2")};
+
+    private final double[] kAngle  = new double[K_COUNT];
+    private final double[] kRadial = new double[K_COUNT];
+    private final double[] kSize   = new double[K_COUNT];
+    private final double[] kRot    = new double[K_COUNT];
+    private final double[] kSpin   = new double[K_COUNT];
+    private final int[]    kShape  = new int[K_COUNT];
+    private final int[]    kPal    = new int[K_COUNT];
+    private final double[][] kShapes = new double[6][8];
+    private final double[] kvx = new double[8];
+    private final double[] kvy = new double[8];
 
     private final GameCamera camera;
 
     public ProceduralPlanetRenderer(GameCamera camera) {
         this.camera = camera;
+        initKuiperBelt();
     }
 
     // ── Used by game view (converts world → screen first) ──
@@ -85,7 +125,6 @@ public class ProceduralPlanetRenderer {
             gc.fillPolygon(xs, ys, 3);
             gc.strokePolygon(xs, ys, 3);
         }
-
         gc.setFill(Color.web("#ffb627"));
         gc.fillOval(sx - r, sy - r, r*2, r*2);
         gc.setFill(Color.web("#ffd93b"));
@@ -110,11 +149,15 @@ public class ProceduralPlanetRenderer {
                        double cx, double cy, double r, Color color) {
         gc.save();
 
-
+        if (name.equals("Haumea")) {
+            gc.translate(cx, cy);
+            gc.rotate(-HAUMEA_TILT);
+            gc.scale(1, 0.62);
+            cx = 0;
+            cy = 0;
+        }
         if (name.equals("Saturn")) drawSaturnRings(gc, cx, cy, r);
         if (name.equals("Uranus") && r > 6) uranusRing(gc, cx, cy, r, 0);
-
-        // Atmosphere glow for Earth and Venus
         if (r > 8 && (name.equals("Earth") || name.equals("Venus"))) {
             Color atm = name.equals("Earth")
                     ? Color.color(0.4, 0.7, 1.0, 1.0)
@@ -125,7 +168,6 @@ public class ProceduralPlanetRenderer {
             gc.fillOval(cx - r*1.15, cy - r*1.15, r*2.30, r*2.30);
         }
 
-        // Flat base sphere
         Color base = realBase(name, color);
         drawSphere(gc, cx, cy, r, base);
 
@@ -141,6 +183,10 @@ public class ProceduralPlanetRenderer {
                 case "Saturn"  -> drawSaturnBands(gc, cx, cy, r);
                 case "Uranus"  -> drawUranus(gc, cx, cy, r);
                 case "Neptune" -> drawNeptune(gc, cx, cy, r);
+                case "Pluto"    -> drawPluto(gc, cx, cy, r);
+                case "Eris"     -> drawEris(gc, cx, cy, r);
+                case "Haumea"   -> drawHaumea(gc, cx, cy, r);
+                case "Makemake" -> drawMakemake(gc, cx, cy, r);
             }
         }
 
@@ -156,8 +202,6 @@ public class ProceduralPlanetRenderer {
     }
 
 
-
-
     private Color realBase(String name, Color fallback) {
         return switch (name) {
             case "Earth"   -> Color.web("#2f7fe0");
@@ -169,6 +213,10 @@ public class ProceduralPlanetRenderer {
             case "Saturn"  -> Color.web("#ecd9a0");
             case "Uranus"  -> Color.web("#a4e6e8");
             case "Neptune" -> Color.web("#3d63d6");
+            case "Pluto"    -> Color.web("#d8bf9f");
+            case "Eris"     -> Color.web("#e3e5ee");
+            case "Haumea"   -> Color.web("#e8eff7");
+            case "Makemake" -> Color.web("#c9855c");
             default        -> fallback;
         };
     }
@@ -287,8 +335,6 @@ public class ProceduralPlanetRenderer {
     private void drawEarth(GraphicsContext gc, double cx, double cy, double r) {
         gc.save();
         clipCircle(gc, cx, cy, r);
-
-
         gc.setFill(Color.web("#2468c9"));
         gc.fillOval(cx - r*0.95, cy + r*0.10, r*1.9, r*0.95);
 
@@ -313,7 +359,6 @@ public class ProceduralPlanetRenderer {
         landBlob(gc, cx, cy, r, new double[]{
                 0.10,-0.22,  0.38,-0.22,  0.52, 0.00,  0.40, 0.24,
                 0.32, 0.54,  0.16, 0.44,  0.10, 0.16,  0.00,-0.04}, dark, light);
-
         gc.setFill(Color.web("#e3c46f"));
         blob(gc, cx, cy, r, new double[]{
                 0.12,-0.16,  0.36,-0.18,  0.42,-0.04,  0.24,-0.02,  0.10,-0.06});
@@ -326,7 +371,6 @@ public class ProceduralPlanetRenderer {
         gc.fillOval(cx - r*0.55, cy - r*1.15, r*1.10, r*0.42);
         gc.fillOval(cx - r*0.50, cy + r*0.80, r*1.00, r*0.40);
 
-        // Cloud swirl
         gc.setLineCap(StrokeLineCap.ROUND);
         gc.setStroke(Color.color(1, 1, 1, 0.85));
         gc.setLineWidth(Math.max(1.2, r * 0.07));
@@ -341,7 +385,6 @@ public class ProceduralPlanetRenderer {
     private void drawMoon(GraphicsContext gc, double cx, double cy, double r) {
         gc.save();
         clipCircle(gc, cx, cy, r);
-
         gc.setFill(Color.web("#9c9cae"));
         blob(gc, cx, cy, r, new double[]{
                 -0.70,-0.20, -0.52,-0.48, -0.25,-0.50, -0.20,-0.22,
@@ -378,8 +421,6 @@ public class ProceduralPlanetRenderer {
     private void drawMars(GraphicsContext gc, double cx, double cy, double r) {
         gc.save();
         clipCircle(gc, cx, cy, r);
-
-
         gc.setFill(Color.web("#8e3c26"));
         blob(gc, cx, cy, r, new double[]{
                 -0.10,-0.20,  0.12,-0.28,  0.26,-0.05,  0.14, 0.26,  0.00, 0.18, -0.14, 0.02});
@@ -495,11 +536,9 @@ public class ProceduralPlanetRenderer {
 
         gc.restore();
     }
-
     private void drawSaturnRings(GraphicsContext gc, double cx, double cy, double r) {
         saturnRing(gc, cx, cy, r, 0);
     }
-
 
     private void drawSaturnRingsFront(GraphicsContext gc, double cx, double cy, double r) {
         saturnRing(gc, cx, cy, r, 180);
@@ -508,7 +547,7 @@ public class ProceduralPlanetRenderer {
 
     private void saturnRing(GraphicsContext gc, double cx, double cy, double r, double start) {
         boolean front = start >= 180;
-        double k = 0.24;                                  // ring er chapta bhaab
+        double k = 0.24;
         Color line = edge(Color.web("#ecd9a0"));
 
         gc.save();
@@ -517,10 +556,9 @@ public class ProceduralPlanetRenderer {
 
         //          inner  outer
         ringBand(gc, r, k, 1.50, 1.66, front, Color.web("#d8b36a"));   // inner ring
-        ringBand(gc, r, k, 1.73, 1.99, front, Color.web("#f1d594"));   // B ring (ujjol)
+        ringBand(gc, r, k, 1.73, 1.99, front, Color.web("#f1d594"));   // B ring
         ringBand(gc, r, k, 2.03, 2.20, front, Color.web("#e3bd78"));   // A ring
 
-        // Sima er dark outline
         gc.setLineCap(StrokeLineCap.BUTT);
         gc.setStroke(line);
         gc.setLineWidth(Math.max(0.8, r * 0.012));
@@ -571,14 +609,11 @@ public class ProceduralPlanetRenderer {
             wavyBand(gc, 0, 0, r, edges[i], edges[i + 1], 0, 0, cols[i]);
         }
 
-
         gc.setStroke(Color.color(0.30, 0.18, 0.06, 0.55));
         gc.setLineWidth(Math.max(0.8, r * 0.010));
         for (int i = 1; i < edges.length - 1; i++) {
             gc.strokeLine(-r, edges[i] * r, r, edges[i] * r);
         }
-
-
         gc.setFill(Color.web("#b88a4a"));
         double hy = -r * 0.88, hr = r * 0.16;
         double[] xs = new double[6], ys = new double[6];
@@ -587,8 +622,6 @@ public class ProceduralPlanetRenderer {
             ys[i] = hy + Math.sin(i * Math.PI / 3) * hr * 0.6;
         }
         gc.fillPolygon(xs, ys, 6);
-
-
         gc.setFill(Color.color(0.15, 0.08, 0.05, 0.25));
         gc.fillRect(-r, r * 0.20, r * 2, r * 0.14);
 
@@ -599,7 +632,7 @@ public class ProceduralPlanetRenderer {
     private void uranusRing(GraphicsContext gc, double cx, double cy, double r, double start) {
         gc.save();
         gc.translate(cx, cy);
-        gc.rotate(-75);
+        gc.rotate(-URANUS_RING_TILT);
         gc.setLineCap(StrokeLineCap.BUTT);
         double rx = r * 1.55, ry = r * 0.42;
         gc.setStroke(edge(Color.web("#a4e6e8")));
@@ -614,15 +647,12 @@ public class ProceduralPlanetRenderer {
     private void drawUranus(GraphicsContext gc, double cx, double cy, double r) {
         gc.save();
         clipCircle(gc, cx, cy, r);
-
         gc.setFill(Color.web("#c8f4f4"));
         gc.fillOval(cx - r*0.80, cy - r*1.25, r*1.60, r*0.85);
         gc.setFill(Color.web("#8fd8de"));
         gc.fillOval(cx - r*1.05, cy + r*0.25, r*2.10, r*0.40);
         gc.setFill(Color.web("#b6eef0"));
         gc.fillOval(cx - r*1.05, cy - r*0.10, r*2.10, r*0.32);
-
-
         gc.setFill(Color.color(1, 1, 1, 0.8));
         gc.fillOval(cx + r*0.30, cy - r*0.45, r*0.10, r*0.10);
         gc.fillOval(cx + r*0.42, cy - r*0.32, r*0.06, r*0.06);
@@ -633,13 +663,9 @@ public class ProceduralPlanetRenderer {
     private void drawNeptune(GraphicsContext gc, double cx, double cy, double r) {
         gc.save();
         clipCircle(gc, cx, cy, r);
-
-
         wavyBand(gc, cx, cy, r, -0.55, -0.30, 0.03, 0.5, Color.web("#2f4fb8"));
         wavyBand(gc, cx, cy, r,  0.45,  0.75, 0.03, 1.8, Color.web("#2f4fb8"));
         wavyBand(gc, cx, cy, r, -1.10, -0.80, 0.02, 0.0, Color.web("#5d86f0"));
-
-
         double sx = cx - r*0.35, sy = cy - r*0.05, sw = r*0.52, sh = r*0.30;
         gc.setFill(Color.web("#1c2f8e"));
         gc.fillOval(sx, sy, sw, sh);
@@ -654,6 +680,242 @@ public class ProceduralPlanetRenderer {
         gc.strokeArc(cx - r*0.05, cy - r*0.05, r*0.90, r*0.26, 15, 140, ArcType.OPEN);
         gc.strokeArc(cx - r*0.70, cy + r*0.38, r*1.00, r*0.28, 200, 130, ArcType.OPEN);
         gc.strokeArc(cx + r*0.05, cy - r*0.55, r*0.60, r*0.20, 200, 120, ArcType.OPEN);
+
+        gc.restore();
+    }
+
+    // ── Kuiper belt ────────────────────────────────────────────────────────────
+
+    private void initKuiperBelt() {
+        Random rnd = new Random(K_SEED);
+
+        for (double[] sh : kShapes) {
+            for (int i = 0; i < sh.length; i++) sh[i] = 0.68 + rnd.nextDouble() * 0.32;
+        }
+
+        for (int i = 0; i < K_COUNT; i++) {
+            double u = rnd.nextDouble();
+            double t;
+            if (u < 0.22) {
+                t = 0.47 + (rnd.nextDouble() + rnd.nextDouble() - 1) * 0.08;   // 3:2 resonance jhnk (Pluto)
+            } else if (u < 0.34) {
+                t = 0.89 + (rnd.nextDouble() + rnd.nextDouble() - 1) * 0.09;   // 2:1 resonance jhnk
+            } else {
+                t = (rnd.nextDouble() + rnd.nextDouble()) / 2 * (0.8 + rnd.nextDouble() * 0.4);
+            }
+            kRadial[i] = Math.max(0, Math.min(1, t));
+            kAngle[i]  = rnd.nextDouble() * Math.PI * 2;
+            kSize[i]   = (0.07 + Math.pow(rnd.nextDouble(), 2.4) * 0.45) / 20.0;
+            kRot[i]    = rnd.nextDouble() * Math.PI * 2;
+            kSpin[i]   = (rnd.nextDouble() - 0.5) * 0.8;
+            kShape[i]  = i % kShapes.length;
+            kPal[i]    = rnd.nextInt(K_PALETTE.length);
+        }
+    }
+
+
+    public void drawKuiperBelt(GraphicsContext gc, Star star, List<Planet> planets, double time) {
+        double a = planets.stream().mapToDouble(Planet::getSemiMajorAxis).max().orElse(0);
+        if (a <= 0) return;
+        drawKuiperBelt(gc, star.getX(), star.getY(), a * 1.05, a * 1.70, time);
+    }
+
+
+    public void drawKuiperBeltMap(GraphicsContext gc, double cx, double cy,
+                                  double innerPx, double outerPx, double time) {
+        double width = outerPx - innerPx;
+        gc.save();
+        for (int i = 0; i < K_COUNT; i++) {
+            double d = innerPx + kRadial[i] * width;
+            double a = kAngle[i] + K_ANGULAR_SPEED * Math.pow(innerPx / d, 1.5) * time;
+            double dot = kSize[i] > 0.012 ? 2.0 : 1.2;
+            gc.setFill(K_PALETTE[kPal[i]][0]);
+            gc.fillRect(cx + Math.cos(a) * d, cy + Math.sin(a) * d, dot, dot);
+        }
+
+
+        for (int i = 0; i < K_DWARF_NAME.length; i++) {
+            double d = innerPx + K_DWARF_F[i] * width;
+            double a = K_DWARF_A[i] + K_ANGULAR_SPEED * Math.pow(innerPx / d, 1.5) * time;
+            double x = cx + Math.cos(a) * d;
+            double y = cy + Math.sin(a) * d;
+            double r = 7;
+
+            drawAt(gc, K_DWARF_NAME[i], x, y, r, Color.GRAY);
+
+            gc.setFill(Color.color(1, 1, 1, 0.75));
+            gc.setFont(javafx.scene.text.Font.font("Courier New", 10));
+            gc.setTextAlign(javafx.scene.text.TextAlignment.LEFT);
+            gc.fillText(K_DWARF_NAME[i], x + r + 4, y + 3);
+        }
+
+        gc.restore();
+    }
+
+
+    public void drawKuiperBelt(GraphicsContext gc, double sunX, double sunY,
+                               double innerR, double outerR, double time) {
+        double zoom  = camera.getZoom();
+        double width = outerR - innerR;
+        double cx    = camera.toScreenX(sunX);
+        double cy    = camera.toScreenY(sunY);
+        double sw    = camera.getScreenW();
+        double sh    = camera.getScreenH();
+
+        gc.save();
+
+
+        double rMid = (innerR + outerR) / 2 * zoom;
+        gc.setStroke(K_TINT);
+        gc.setLineWidth(width * zoom);
+        gc.strokeOval(cx - rMid, cy - rMid, rMid * 2, rMid * 2);
+
+        for (int i = 0; i < K_COUNT; i++) {
+            double d = innerR + kRadial[i] * width;
+
+            double a = kAngle[i] + K_ANGULAR_SPEED * Math.pow(innerR / d, 1.5) * time;
+
+            double sx = camera.toScreenX(sunX + Math.cos(a) * d);
+            double sy = camera.toScreenY(sunY + Math.sin(a) * d);
+            double px = kSize[i] * width * zoom;
+
+
+            if (sx < -40 || sx > sw + 40 || sy < -40 || sy > sh + 40) continue;
+
+            Color[] c = K_PALETTE[kPal[i]];
+            if (px < K_DOT_LIMIT_PX) {
+                double dot = Math.max(1, px * 0.8);
+                gc.setFill(c[0]);
+                gc.fillRect(sx, sy, dot, dot);
+            } else {
+                drawKuiperRock(gc, sx, sy, px, kRot[i] + time * kSpin[i], kShapes[kShape[i]], c);
+            }
+        }
+
+
+        drawKuiperDwarfs(gc, sunX, sunY, innerR, width, zoom, time);
+
+        gc.restore();
+    }
+
+    private void drawKuiperDwarfs(GraphicsContext gc, double sunX, double sunY,
+                                  double innerR, double width, double zoom, double time) {
+        double sw = camera.getScreenW();
+        double sh = camera.getScreenH();
+
+        for (int i = 0; i < K_DWARF_NAME.length; i++) {
+            double d = innerR + K_DWARF_F[i] * width;
+            double a = K_DWARF_A[i] + K_ANGULAR_SPEED * Math.pow(innerR / d, 1.5) * time;
+            double x = camera.toScreenX(sunX + Math.cos(a) * d);
+            double y = camera.toScreenY(sunY + Math.sin(a) * d);
+            double r = Math.max(K_DWARF_VIS[i] / 20.0 * width * zoom, 4.5);
+
+            if (x < -r*3 || x > sw + r*3 || y < -r*3 || y > sh + r*3) continue;
+
+            drawAt(gc, K_DWARF_NAME[i], x, y, r, Color.GRAY);
+
+
+            if (r > 14) {
+                double ma = K_DWARF_A[i] + time * K_MOON[i][2];
+                double mr = Math.max(r * K_MOON[i][1], 2);
+                gc.setFill(K_MOON_COLOR[i]);
+                gc.fillOval(x + Math.cos(ma) * r * K_MOON[i][0] - mr,
+                        y + Math.sin(ma) * r * K_MOON[i][0] * 0.6 - mr, mr*2, mr*2);
+            }
+
+            gc.setFill(Color.color(1, 1, 1, 0.75));
+            gc.setFont(javafx.scene.text.Font.font("Courier New", 12));
+            gc.setTextAlign(javafx.scene.text.TextAlignment.LEFT);
+            gc.fillText(K_DWARF_NAME[i], x + r + 6, y + 4);
+        }
+    }
+
+    private void drawKuiperRock(GraphicsContext gc, double x, double y, double px,
+                                double rotation, double[] sh, Color[] c) {
+        gc.setFill(c[1]);
+        kuiperPolygon(gc, x + px * 0.10, y + px * 0.10, px, rotation, sh);
+        gc.setFill(c[0]);
+        kuiperPolygon(gc, x, y, px * 0.92, rotation, sh);
+
+        if (px > 8) {
+            gc.setFill(Color.color(1, 1, 1, 0.55));
+            gc.fillOval(x - px * 0.50, y - px * 0.45, px * 0.40, px * 0.20);
+            gc.setFill(c[1]);
+            gc.fillOval(x + px * 0.11, y - px * 0.04, px * 0.28, px * 0.28);
+        }
+    }
+
+    private void kuiperPolygon(GraphicsContext gc, double x, double y, double radius,
+                               double rotation, double[] sh) {
+        for (int i = 0; i < 8; i++) {
+            double a = rotation + i * Math.PI / 4;
+            kvx[i] = x + Math.cos(a) * radius * sh[i];
+            kvy[i] = y + Math.sin(a) * radius * sh[i];
+        }
+        gc.fillPolygon(kvx, kvy, 8);
+    }
+
+
+    private void heart(GraphicsContext gc, double cx, double cy, double s) {
+        gc.beginPath();
+        gc.moveTo(cx, cy + s*0.28);
+        gc.bezierCurveTo(cx - s*0.50, cy - s*0.05, cx - s*0.28, cy - s*0.45, cx, cy - s*0.20);
+        gc.bezierCurveTo(cx + s*0.28, cy - s*0.45, cx + s*0.50, cy - s*0.05, cx, cy + s*0.28);
+        gc.closePath();
+        gc.fill();
+    }
+
+    private void drawPluto(GraphicsContext gc, double cx, double cy, double r) {
+        gc.save();
+        clipCircle(gc, cx, cy, r);
+
+
+        gc.setFill(Color.web("#8d5f48"));
+        gc.fillOval(cx - r*0.85, cy + r*0.07, r*0.80, r*0.56);
+
+        gc.setFill(Color.web("#f6ead6"));
+        heart(gc, cx, cy, r);
+
+        gc.setFill(Color.web("#b9926f"));
+        gc.fillOval(cx + r*0.15, cy - r*0.58, r*0.50, r*0.36);
+
+        gc.restore();
+    }
+
+    private void drawEris(GraphicsContext gc, double cx, double cy, double r) {
+        gc.save();
+        clipCircle(gc, cx, cy, r);
+
+
+        gc.setFill(Color.web("#c4c8d6"));
+        gc.fillOval(cx - r*0.75, cy - r*0.10, r*0.90, r*0.60);
+        gc.fillOval(cx + r*0.10, cy - r*0.55, r*0.60, r*0.40);
+
+        gc.restore();
+    }
+
+    // Haumea:
+    private void drawHaumea(GraphicsContext gc, double cx, double cy, double r) {
+        gc.save();
+        clipCircle(gc, cx, cy, r);
+
+        gc.setFill(Color.web("#c9d8ea"));
+        gc.fillOval(cx - r*0.75, cy - r*0.35, r*0.60, r*0.40);
+
+        gc.setFill(Color.web("#b5543f"));
+        gc.fillOval(cx, cy - r*0.09, r*0.40, r*0.28);
+
+        gc.restore();
+    }
+
+    private void drawMakemake(GraphicsContext gc, double cx, double cy, double r) {
+        gc.save();
+        clipCircle(gc, cx, cy, r);
+
+        gc.setFill(Color.web("#a8613f"));
+        gc.fillOval(cx - r*0.80, cy, r*1.00, r*0.60);
+        gc.setFill(Color.web("#e0a17a"));
+        gc.fillOval(cx + r*0.05, cy - r*0.50, r*0.60, r*0.40);
 
         gc.restore();
     }
