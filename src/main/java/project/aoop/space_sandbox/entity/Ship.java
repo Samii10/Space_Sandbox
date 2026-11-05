@@ -54,6 +54,16 @@ public class Ship {
     public void setY(double y)          { this.y = y; }
     public void setVx(double vx)        { this.vx = vx; }
     public void setVy(double vy)        { this.vy = vy; }
+    public void setAngle(double angle)  { this.angle = angle; }
     public void setHealth(int h)        { this.health = h; }
     public void setEngineTier(int tier) { this.engineTier = tier; }
+
+    public void reset() {
+        x = PhysicsConfig.SHIP_START_X;
+        y = PhysicsConfig.SHIP_START_Y;
+        vx = PhysicsConfig.SHIP_START_VX;
+        vy = PhysicsConfig.SHIP_START_VY;
+        angle = 0;
+        health = 100;
+    }
 }

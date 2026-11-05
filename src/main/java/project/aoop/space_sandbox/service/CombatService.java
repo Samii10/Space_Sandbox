@@ -12,6 +12,7 @@ import project.aoop.space_sandbox.entity.Star;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.Consumer;
 
 @Service
 public class CombatService {
@@ -33,6 +34,11 @@ public class CombatService {
     private boolean charging      = false;
     private boolean laserMode     = false;
     private boolean firing        = false; // set by the mouse, consumed in update()
+    private Consumer<Bullet> fireListener = bullet -> {};
+
+    public void setFireListener(Consumer<Bullet> listener) {
+        fireListener = listener == null ? bullet -> {} : listener;
+    }
 
     public CombatService(LevelService levelService, Star star, List<Planet> planets) {
         this.levelService = levelService;
@@ -82,7 +88,9 @@ public class CombatService {
         double vx = Math.cos(a) * speed + ship.getVx();
         double vy = Math.sin(a) * speed + ship.getVy();
 
-        bullets.add(Bullet.plasma(m[0], m[1], vx, vy, a, BULLET_RANGE / speed));
+        Bullet bullet = Bullet.plasma(m[0], m[1], vx, vy, a, BULLET_RANGE / speed);
+        bullets.add(bullet);
+        fireListener.accept(bullet);
         shootCooldown = levelService.getFireRateCooldown();
         bulletFlash   = 1.0;
     }
@@ -90,7 +98,9 @@ public class CombatService {
     private void fireChargedLaser(Ship ship) {
         double[] m = ShipGeometry.toWorld(ship,
                 ShipGeometry.LASER_MUZZLE_X, ShipGeometry.LASER_MUZZLE_Y);
-        bullets.add(Bullet.laser(m[0], m[1], ship.getAngle(), chargeLevel));
+        Bullet bullet = Bullet.laser(m[0], m[1], ship.getAngle(), chargeLevel);
+        bullets.add(bullet);
+        fireListener.accept(bullet);
         System.out.println("⚡ Laser fired at " + (int) (chargeLevel * 100) + "% charge");
     }
 
@@ -217,4 +227,17 @@ public class CombatService {
     public boolean      isCharging()     { return charging; }
     public boolean      isLaserMode()    { return shouldUseLaser(); }
     public boolean      isFullyCharged() { return chargeLevel >= 1.0; }
+
+    public void spawnRemotePlasma(double x, double y, double vx, double vy,
+                                  double angle, double lifetime) {
+        bullets.add(Bullet.plasma(x, y, vx, vy, angle, lifetime));
+    }
+
+    public void spawnRemoteBeam(double chargeLevel) {
+        bullets.add(Bullet.laser(0, 0, 0, Math.max(0, Math.min(1, chargeLevel))));
+    }
+
+    public void clearRemoteBullets() {
+        bullets.removeIf(Bullet::isLaser);
+    }
 }

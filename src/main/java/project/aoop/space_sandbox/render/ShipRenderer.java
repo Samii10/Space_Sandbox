@@ -43,13 +43,22 @@ public class ShipRenderer {
 
     // Same signature as before, so GameRenderer needs no change
     public void render(GraphicsContext gc, GameCamera cam, Ship ship, boolean thrusting) {
+        renderInternal(gc, cam, ship, thrusting, true);
+    }
+
+    public void renderRemote(GraphicsContext gc, GameCamera cam, Ship ship, boolean thrusting) {
+        renderInternal(gc, cam, ship, thrusting, false);
+    }
+
+    private void renderInternal(GraphicsContext gc, GameCamera cam, Ship ship,
+                                boolean thrusting, boolean localEffects) {
         // Draw at the ship's TRUE screen position so it always lines up with the shots
         double sx   = cam.toScreenX(ship.getX());
         double sy   = cam.toScreenY(ship.getY());
         double unit = ShipGeometry.WORLD_PER_UNIT * cam.getZoom();   // pixels per design unit
         double t    = System.nanoTime() * 1e-9;
 
-        if (combatService.isCharging()) {
+        if (localEffects && combatService.isCharging()) {
             drawChargeRing(gc, sx, sy, unit, combatService.getCharge(),
                     combatService.isFullyCharged(), t);
         }
@@ -63,8 +72,8 @@ public class ShipRenderer {
 
         drawFlames(gc, thrusting, t);
         drawWings(gc);
-        drawBulletBarrel(gc, combatService.getBulletFlash());
-        drawLaserEmitter(gc, combatService.getCharge(), combatService.isLaserMode());
+        drawBulletBarrel(gc, localEffects ? combatService.getBulletFlash() : 0);
+        drawLaserEmitter(gc, localEffects ? combatService.getCharge() : 0, false);
         drawHull(gc);
         drawEngines(gc, thrusting);
         drawRearBlock(gc);
