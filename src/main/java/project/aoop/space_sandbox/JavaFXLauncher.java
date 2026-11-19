@@ -28,6 +28,7 @@ public class JavaFXLauncher extends Application {
         double W = 1280, H = 720;
 
         Canvas canvas = new Canvas(W, H);
+        Pane root = new Pane(canvas);
 
         GameCamera camera = springContext.getBean(GameCamera.class);
         camera.setScreenSize(W, H);
@@ -41,10 +42,23 @@ public class JavaFXLauncher extends Application {
         // Tell GameLoop the canvas size so it can handle minimap clicks
         gameLoop.setCanvasSize(W, H);
 
-        GameState gameState = springContext.getBean(GameState.class);
-        gameState.setState(GameState.State.RUNNING);
+        root.widthProperty().addListener((obs, oldValue, newValue) -> {
+            double width = newValue.doubleValue();
+            canvas.setWidth(width);
+            camera.setScreenSize(width, canvas.getHeight());
+            gameLoop.setCanvasSize(width, canvas.getHeight());
+        });
+        root.heightProperty().addListener((obs, oldValue, newValue) -> {
+            double height = newValue.doubleValue();
+            canvas.setHeight(height);
+            camera.setScreenSize(canvas.getWidth(), height);
+            gameLoop.setCanvasSize(canvas.getWidth(), height);
+        });
 
-        Scene scene = new Scene(new Pane(canvas), W, H);
+        GameState gameState = springContext.getBean(GameState.class);
+        gameState.setState(GameState.State.MENU);
+
+        Scene scene = new Scene(root, W, H);
 
         // Keyboard
         inputHandler.attach(scene);
@@ -61,8 +75,9 @@ public class JavaFXLauncher extends Application {
 
         stage.setTitle("Space Sandbox");
         stage.setScene(scene);
-        stage.setResizable(false);
+        stage.setResizable(true);
         stage.show();
+        stage.setMaximized(true);
 
         gameLoop.start();
     }

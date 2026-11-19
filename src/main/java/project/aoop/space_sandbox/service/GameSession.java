@@ -4,6 +4,7 @@ import org.springframework.stereotype.Service;
 import project.aoop.space_sandbox.engine.GameState;
 import project.aoop.space_sandbox.entity.Ship;
 import project.aoop.space_sandbox.network.NetworkService;
+import project.aoop.space_sandbox.service.CombatService;
 
 import java.util.function.Consumer;
 
@@ -18,13 +19,20 @@ public class GameSession {
     private final GameState      gameState;
     private final Ship           ship;
     private final LevelService   levelService;
+    private final BoostService   boostService;
+    private final CombatService  combatService;
+    private final EnemyService   enemyService;
 
     public GameSession(NetworkService network, GameState gameState,
-                       Ship ship, LevelService levelService) {
+                       Ship ship, LevelService levelService, BoostService boostService,
+                       CombatService combatService, EnemyService enemyService) {
         this.network = network;
         this.gameState = gameState;
         this.ship = ship;
         this.levelService = levelService;
+        this.boostService = boostService;
+        this.combatService = combatService;
+        this.enemyService = enemyService;
     }
 
     public void startNewGame() {
@@ -66,6 +74,9 @@ public class GameSession {
 
     private void freshStart() {
         ship.reset();
+        boostService.reset();
+        enemyService.reset();
+        combatService.resetWeapons();
         for (int guard = 0; guard < 10 && levelService.getLevel() > 1; guard++) levelService.levelDown();
     }
 }

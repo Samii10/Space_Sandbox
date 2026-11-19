@@ -52,40 +52,41 @@ public class BulletRenderer {
 
     // ── BULLET: glowing plasma slug with a fading tail ───────────────────
 
+    private static Color pc(boolean enemy, double r, double g, double b, double a) {
+        return enemy ? Color.color(r, g * 0.2, b * 0.2, a) : Color.color(r, g, b, a);
+    }
+
     private void drawPlasma(GraphicsContext gc, double sx, double sy, Bullet b, double unit) {
+        boolean en  = b.isEnemy();
         double fade = Math.min(1.0, b.getLifetime() * 6.0);
         double len  = Math.max(unit * 3.4, 12);
         double hw   = Math.max(unit * 0.30, 1.7);
-        double ang  = Math.toDegrees(b.getAngle());   // heading, not world velocity
+        double ang  = Math.toDegrees(b.getAngle());
 
         gc.save();
         gc.translate(sx, sy);
         gc.rotate(ang);
 
-        // tapered tail (transparent -> orange)
         gc.setFill(new LinearGradient(0, 0, 1, 0, true, CycleMethod.NO_CYCLE,
-                new Stop(0.0, Color.color(1.0, 0.40, 0.05, 0.0)),
-                new Stop(1.0, Color.color(1.0, 0.62, 0.12, 0.55 * fade))));
+                new Stop(0.0, pc(en, 1.0, 0.40, 0.05, 0.0)),
+                new Stop(1.0, pc(en, 1.0, 0.62, 0.12, 0.55 * fade))));
         gc.fillPolygon(
                 new double[]{-len * 1.6, -len * 0.2, 0, 0, -len * 0.2},
                 new double[]{0, -hw * 1.5, -hw * 1.5, hw * 1.5, hw * 1.5}, 5);
 
-        // soft halo
         double hr = hw * 4.2;
         gc.setFill(new RadialGradient(0, 0, 0.5, 0.5, 0.5, true, CycleMethod.NO_CYCLE,
-                new Stop(0.0, Color.color(1.0, 0.75, 0.25, 0.55 * fade)),
-                new Stop(1.0, Color.color(1.0, 0.40, 0.0, 0.0))));
+                new Stop(0.0, pc(en, 1.0, 0.75, 0.25, 0.55 * fade)),
+                new Stop(1.0, pc(en, 1.0, 0.40, 0.0, 0.0))));
         gc.fillOval(-hr, -hr, hr * 2, hr * 2);
 
-        // rounded body (lighter edges = cylinder look)
         gc.setFill(new LinearGradient(0, 0, 0, 1, true, CycleMethod.NO_CYCLE,
-                new Stop(0.0, Color.color(1.0, 0.85, 0.30, fade)),
-                new Stop(0.5, Color.color(1.0, 0.60, 0.12, fade)),
-                new Stop(1.0, Color.color(1.0, 0.85, 0.30, fade))));
+                new Stop(0.0, pc(en, 1.0, 0.85, 0.30, fade)),
+                new Stop(0.5, pc(en, 1.0, 0.60, 0.12, fade)),
+                new Stop(1.0, pc(en, 1.0, 0.85, 0.30, fade))));
         gc.fillRoundRect(-len * 0.5, -hw, len * 0.5 + hw, hw * 2, hw * 2, hw * 2);
 
-        // white-hot core
-        gc.setFill(Color.color(1.0, 0.97, 0.82, fade));
+        gc.setFill(pc(en, 1.0, 0.97, 0.82, fade));
         gc.fillRoundRect(-len * 0.32, -hw * 0.45, len * 0.32 + hw * 0.7, hw * 0.9, hw * 0.9, hw * 0.9);
 
         gc.restore();

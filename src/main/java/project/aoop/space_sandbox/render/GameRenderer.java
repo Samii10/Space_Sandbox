@@ -39,6 +39,7 @@ public class GameRenderer {
     private final SolarSystemMap           solarSystemMap;
     private final ProceduralPlanetRenderer proceduralRenderer;
     private final BulletRenderer           bulletRenderer;
+    private final EnemyRenderer            enemyRenderer;
     private final NavigationService        navigationService;
     private final LevelService             levelService;
     private final CombatService            combatService;
@@ -46,6 +47,11 @@ public class GameRenderer {
     private final List<Planet>             planets;
     private final AsteroidRenderer         asteroidRenderer;
     private final AsteroidWarningRenderer  asteroidWarningRenderer;
+    private final RemoteShipRenderer       remoteShipRenderer;
+    private final CoopHudRenderer          coopHudRenderer;
+    private final TempMenu                 tempMenu;
+    private final BoostHudRenderer         boostHudRenderer;
+    private final AmmoHudRenderer ammoHudRenderer;
 
     public GameRenderer(GameCamera camera, StarfieldRenderer starfieldRenderer,
                         ShipRenderer shipRenderer, PlanetRenderer planetRenderer,
@@ -53,11 +59,17 @@ public class GameRenderer {
                         SolarSystemMap solarSystemMap,
                         ProceduralPlanetRenderer proceduralRenderer,
                         BulletRenderer bulletRenderer,
+                        EnemyRenderer enemyRenderer,
                         NavigationService navigationService,
                         LevelService levelService,
                         CombatService combatService,
                         AsteroidRenderer asteroidRenderer,
                         AsteroidWarningRenderer asteroidWarningRenderer,
+                        RemoteShipRenderer remoteShipRenderer,
+                        CoopHudRenderer coopHudRenderer,
+                        TempMenu tempMenu,
+                        BoostHudRenderer boostHudRenderer,
+                        AmmoHudRenderer ammoHudRenderer,
                         Star star, List<Planet> planets) {
         this.camera                  = camera;
         this.starfieldRenderer       = starfieldRenderer;
@@ -68,12 +80,18 @@ public class GameRenderer {
         this.solarSystemMap          = solarSystemMap;
         this.proceduralRenderer      = proceduralRenderer;
         this.bulletRenderer          = bulletRenderer;
+        this.enemyRenderer           = enemyRenderer;
         this.navigationService       = navigationService;
         this.levelService            = levelService;
         this.combatService           = combatService;
         this.star                    = star;
         this.asteroidRenderer        = asteroidRenderer;
         this.asteroidWarningRenderer = asteroidWarningRenderer;
+        this.remoteShipRenderer      = remoteShipRenderer;
+        this.coopHudRenderer         = coopHudRenderer;
+        this.tempMenu                = tempMenu;
+        this.boostHudRenderer        = boostHudRenderer;
+        this.ammoHudRenderer         = ammoHudRenderer;
         this.planets                 = planets;
     }
 
@@ -143,7 +161,9 @@ public class GameRenderer {
         planets.forEach(p -> proceduralRenderer.drawPlanet(gc, p));
         asteroidRenderer.render(gc);
         bulletRenderer.render(gc, combatService.getBullets()); // bullets behind ship
+        enemyRenderer.render(gc);
         shipRenderer.render(gc, camera, ship, thrusting);
+        remoteShipRenderer.render(gc);
 
         // HUD — always on top
         minimapRenderer.render(gc, w, h, ship, star, planets);
@@ -151,6 +171,16 @@ public class GameRenderer {
         hudRenderer.drawLockWarnings(gc, ship, planets);
         solarSystemMap.render(gc, w, h, ship, star, planets, navigationService);
         asteroidWarningRenderer.render(gc, ship);
+        coopHudRenderer.render(gc, w, h);
+        boostHudRenderer.render(gc, w, h);
+        ammoHudRenderer.render(gc, w, h);
+    }
+
+    public void renderMenu() {
+        if (gc == null) return;
+        double w = canvas.getWidth(), h = canvas.getHeight();
+        starfieldRenderer.render(gc, camera, w, h);
+        tempMenu.render(gc, w, h);
     }
 
     private void drawPlanetGravityZone(GraphicsContext gc, Planet p, Ship ship) {

@@ -58,6 +58,21 @@ public class Ship {
     public void setHealth(int h)        { this.health = h; }
     public void setEngineTier(int tier) { this.engineTier = tier; }
 
+    /** Adds speed along the direction the ship is facing. */
+    public void thrustBy(double accel, double deltaTime) {
+        vx += Math.cos(angle) * accel * deltaTime;
+        vy += Math.sin(angle) * accel * deltaTime;
+    }
+
+    /** Changes the speed without changing the direction of travel. */
+    public void scaleSpeedTo(double newSpeed) {
+        double s = getSpeed();
+        if (s < 1e-9) return;
+        double k = Math.max(0, newSpeed) / s;
+        vx *= k;
+        vy *= k;
+    }
+
     public void reset() {
         x = PhysicsConfig.SHIP_START_X;
         y = PhysicsConfig.SHIP_START_Y;

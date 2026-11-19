@@ -12,10 +12,26 @@ public class PhysicsConfig {
     public static final double SHIP_THRUST        = 5.6;
     public static final double SHIP_ROTATE_SPEED  = 1.2;
     public static final double SHIP_BRAKE_FORCE   = 4.3;
-    public static final double SHIP_START_X       = 75.0;   // just outside Earth's zone
-    public static final double SHIP_START_Y       = 499.0;  // Earth is at (0, 499)
-    public static final double SHIP_START_VX      = -0.3;   // drifting toward Earth
-    public static final double SHIP_START_VY      = 0.0;
+    public static final double SHIP_START_X       = -208.4; // 75 units outside Venus at its start angle
+    public static final double SHIP_START_Y       = 368.4;
+    public static final double SHIP_START_VX      = 0.153;  // drifting toward Venus
+    public static final double SHIP_START_VY      = -0.265;
+    // ── Mouse aiming and strafing ────────────────────────────────────────
+    public static final double  TURN_RATE              = 8.0;    // rad/s the ship swings toward the mouse (0 = instant)
+    public static final double  STRAFE_POWER           = 0.85;   // A / D acceleration compared with W
+    public static final double  REVERSE_POWER          = 0.60;   // S acceleration compared with W
+    public static final boolean MOVE_RELATIVE_TO_SHIP = true;    // false: WASD = up / left / down / right on screen
+
+    // ── Movement: W builds speed, letting go coasts down ─────────────────
+    public static final double ACCEL_TIME        = 3.0;   // seconds to reach top speed from a standstill
+    public static final double COAST_TIME        = 6.0;   // seconds to coast from top speed to a stop
+
+    // ── Boost (Shift) ────────────────────────────────────────────────────
+    public static final double BOOST_FACTOR      = 1.5;   // boost speed = level top speed x this (level 1: 8 -> 12 u/s)
+    public static final double BOOST_ACCEL_MULT  = 2.5;   // extra acceleration while boosting
+    public static final double BOOST_BLEED_TIME  = 2.5;   // seconds to ease from boost speed back to top speed
+    public static final double BOOST_DURATION    = 5.0;   // seconds of boost from a full tank
+    public static final double BOOST_REFUEL_TIME = 12.0;  // seconds to refill from empty
 
     // Level-indexed values. Index 0 is unused; current values are preserved
     // for every level because the existing ship physics uses the constants above.
@@ -144,4 +160,14 @@ public class PhysicsConfig {
             1.3,   // Level 7
             1.0,   // Level 8
     };
+
+    // ── Weapons per level ────────────────────────────────────────────────
+// Seconds to charge the laser from 0 to 100% (it unlocks at level 5, and gets quicker after)
+    public static final double[] CHARGE_TIMES   = {0, 10.0, 10.0, 10.0, 10.0, 10.0, 8.0, 6.0, 4.0};
+
+    // Bullets per magazine: bigger as the fire rate speeds up
+    public static final int[]    MAGAZINE_SIZES = {0, 10, 14, 18, 22, 28, 34, 42, 50};
+
+    // Seconds to reload
+    public static final double[] RELOAD_TIMES   = {0, 2.0, 1.9, 1.8, 1.6, 1.5, 1.4, 1.3, 1.2};
 }

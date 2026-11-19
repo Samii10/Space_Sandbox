@@ -30,7 +30,7 @@ public class AsteroidService {
 
     private static final double BELT_EDGE_FADE = 90.0;   // belt thins out over this distance at both edges
     private static final double BELT_DENSITY   = 12.0;   // asteroids per 1000 square world units
-    private static final double BELT_DRIFT     = 0.35;   // max slow drift speed (cosmetic)
+    private static final double BELT_DRIFT     = 0.0;    // keep the belt identical on both screens
     private static final double CELL           = 40.0;   // belt is generated in 40x40 chunks
     private static final int    MAX_PER_CELL   = 60;
     private static final long   SEED           = 90210L;

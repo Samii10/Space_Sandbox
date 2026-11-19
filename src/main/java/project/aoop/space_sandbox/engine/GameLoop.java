@@ -10,12 +10,17 @@ import project.aoop.space_sandbox.entity.Ship;
 import project.aoop.space_sandbox.entity.ShipGeometry;
 import project.aoop.space_sandbox.entity.Star;
 import project.aoop.space_sandbox.input.InputHandler;
+import project.aoop.space_sandbox.network.NetworkService;
 import project.aoop.space_sandbox.physics.OrbitalMechanics;
 import project.aoop.space_sandbox.render.GameRenderer;
 import project.aoop.space_sandbox.render.MinimapRenderer;
 import project.aoop.space_sandbox.render.SolarSystemMap;
+import project.aoop.space_sandbox.render.TempMenu;
 import project.aoop.space_sandbox.service.AsteroidService;
+import project.aoop.space_sandbox.service.BoostService;
 import project.aoop.space_sandbox.service.CombatService;
+import project.aoop.space_sandbox.service.EnemyService;
+import project.aoop.space_sandbox.service.GameSession;
 import project.aoop.space_sandbox.service.LevelService;
 import project.aoop.space_sandbox.service.ShipService;
 
@@ -25,10 +30,15 @@ import java.util.List;
 @Component
 public class GameLoop extends AnimationTimer {
 
+    private static final double AIM_DEAD_ZONE = 14.0;   // pixels around the ship where the cursor is ignored
+
     private long    lastTime      = 0;
     private boolean levelUpHeld   = false;
     private boolean levelDownHeld = false;
     private boolean escHeld       = false;
+    private boolean leaveHeld     = false;
+    private boolean mapKeyHeld    = false;
+    private boolean reloadHeld = false;
 
     // Set by JavaFXLauncher after the canvas is created
     private double canvasW = 1280;
@@ -45,15 +55,23 @@ public class GameLoop extends AnimationTimer {
     private final LevelService     levelService;
     private final CombatService    combatService;
     private final AsteroidService  asteroidService;
+    private final BoostService     boostService;
     private final SolarSystemMap   solarSystemMap;
     private final MinimapRenderer  minimapRenderer;
+    private final NetworkService   networkService;
+    private final GameSession      gameSession;
+    private final EnemyService     enemyService;
+    private final TempMenu         tempMenu;
 
     public GameLoop(GameState gameState, ShipService shipService,
                     InputHandler inputHandler, GameRenderer renderer,
                     GameCamera camera, Star star, List<Planet> planets,
                     OrbitalMechanics orbitalMechanics, LevelService levelService,
                     CombatService combatService, AsteroidService asteroidService,
-                    SolarSystemMap solarSystemMap, MinimapRenderer minimapRenderer) {
+                    EnemyService enemyService, BoostService boostService,
+                    SolarSystemMap solarSystemMap, MinimapRenderer minimapRenderer,
+                    NetworkService networkService, GameSession gameSession,
+                    TempMenu tempMenu) {
         this.gameState        = gameState;
         this.shipService      = shipService;
         this.inputHandler     = inputHandler;
@@ -65,9 +83,13 @@ public class GameLoop extends AnimationTimer {
         this.levelService     = levelService;
         this.combatService    = combatService;
         this.asteroidService  = asteroidService;
+        this.boostService     = boostService;
         this.solarSystemMap   = solarSystemMap;
         this.minimapRenderer  = minimapRenderer;
-
+        this.networkService   = networkService;
+        this.gameSession      = gameSession;
+        this.enemyService     = enemyService;
+        this.tempMenu         = tempMenu;
     }
 
     public void setCanvasSize(double w, double h) {
@@ -81,22 +103,63 @@ public class GameLoop extends AnimationTimer {
         double dt = Math.min((now - lastTime) / 1_000_000_000.0, 0.05);
         lastTime = now;
 
-        if (!gameState.isRunning()) return;
+        // ── Menu: nothing of the game runs ────────────────────────────────
+        if (gameState.getState() == GameState.State.MENU) {
+            tempMenu.update(canvasW, canvasH);
+            renderer.renderMenu();
+            inputHandler.clearFrameState();
+            return;
+        }
+
+        // K = back to the menu (this also leaves a co-op session)
+        if (inputHandler.leaveCoop()) {
+            if (!leaveHeld) {
+                leaveHeld = true;
+                gameSession.leaveToMenu();
+                tempMenu.reset();
+                inputHandler.clearFrameState();
+                return;
+            }
+        } else { leaveHeld = false; }
+
+        if (!gameState.isRunning()) return;   // destroyed: the frame stays frozen
 
         Ship ship = shipService.getShip();
 
         // ── 1. Input ──────────────────────────────────────────────────────
-        if (inputHandler.thrustForward()) shipService.thrustForward(dt);
-        if (inputHandler.rotateLeft())    shipService.rotateLeft(dt);
-        if (inputHandler.rotateRight())   shipService.rotateRight(dt);
-        if (inputHandler.brake())         shipService.brake(dt);
 
-        // Clicks on the minimap / open map must never fire the weapons
+        // Shift is held to boost. Releasing it stops the boost and immediately refuels.
+        boostService.setHeld(inputHandler.boostKey());
+
+        // M = open / close the map (clicking the minimap still works too)
+        if (inputHandler.mapKey()) {
+            if (!mapKeyHeld) { solarSystemMap.toggle(); mapKeyHeld = true; }
+        } else { mapKeyHeld = false; }
+
         double  mx          = inputHandler.getMouseX();
         double  my          = inputHandler.getMouseY();
         boolean overMinimap = minimapRenderer.isClickOnMinimap(mx, my, canvasW, canvasH);
         boolean mapOpen     = solarSystemMap.isOpen();
 
+        // The MOUSE aims the ship. Not while the map is open or the cursor is on the minimap.
+        if (inputHandler.hasMouse() && !mapOpen && !overMinimap) {
+            double sx = camera.toScreenX(ship.getX());
+            double sy = camera.toScreenY(ship.getY());
+            double dx = mx - sx;
+            double dy = my - sy;
+            if (dx * dx + dy * dy > AIM_DEAD_ZONE * AIM_DEAD_ZONE) {
+                shipService.aimAt(Math.atan2(dy, dx), dt);
+            }
+        }
+
+        // W / A / D (and S) move the ship relative to the way it faces.
+        // Called every frame, so the ship slows down by itself when no key is held.
+        shipService.drive(dt, inputHandler.forwardAxis(), inputHandler.strafeAxis());
+        boolean engineOn = inputHandler.forwardAxis() > 0 || boostService.isActive();
+
+        if (inputHandler.brake()) shipService.brake(dt);
+
+        // Weapons: clicks on the minimap / open map must never fire them
         if (inputHandler.isMouseJustPressed() && !overMinimap && !mapOpen) {
             combatService.onMousePressed(ship);
         }
@@ -105,9 +168,9 @@ public class GameLoop extends AnimationTimer {
         }
         if (inputHandler.isMouseJustReleased()) {
             if (mapOpen) {
-                renderer.handleClick(mx, my);
+                renderer.handleClick(mx, my);          // click a planet to track it
             } else if (overMinimap && !combatService.isCharging()) {
-                solarSystemMap.open();
+                solarSystemMap.open();                 // click the minimap to open the map
             } else {
                 combatService.onMouseReleased(ship);
             }
@@ -118,14 +181,21 @@ public class GameLoop extends AnimationTimer {
             combatService.toggleWeaponMode();
         }
 
-        // L = level up, P = level down (single press each)
-        if (inputHandler.levelUp()) {
-            if (!levelUpHeld) { levelService.levelUp(); levelUpHeld = true; }
-        } else { levelUpHeld = false; }
+        // R = reload (the magazine also reloads by itself when it runs empty)
+        if (inputHandler.reloadKey()) {
+            if (!reloadHeld) { combatService.reload(); reloadHeld = true; }
+        } else { reloadHeld = false; }
 
-        if (inputHandler.levelDown()) {
-            if (!levelDownHeld) { levelService.levelDown(); levelDownHeld = true; }
-        } else { levelDownHeld = false; }
+        // L = level up, P = level down. In co-op only the host decides the shared level.
+        if (!networkService.isClient()) {
+            if (inputHandler.levelUp()) {
+                if (!levelUpHeld) { levelService.levelUp(); levelUpHeld = true; }
+            } else { levelUpHeld = false; }
+
+            if (inputHandler.levelDown()) {
+                if (!levelDownHeld) { levelService.levelDown(); levelDownHeld = true; }
+            } else { levelDownHeld = false; }
+        }
 
         if (inputHandler.closeMap()) {
             if (!escHeld) { solarSystemMap.close(); escHeld = true; }
@@ -146,16 +216,22 @@ public class GameLoop extends AnimationTimer {
         bodies.addAll(planets);
         shipService.update(bodies, dt);
 
-        // ── 4. Weapons, then asteroids (both AFTER the ship moved) ────────
+        // ── 4. Co-op: apply what the partner sent, publish where we are ───
+        networkService.update(dt, ship, engineOn);
+
+        // ── 5. Weapons, then asteroids (both AFTER the ships moved) ───────
         combatService.update(dt, ship);
+        enemyService.update(dt, ship);
         asteroidService.update(dt, ship);
 
         if (ship.getHealth() <= 0) {
-            destroyShip(ship, "☄ DESTROYED — hull breached by asteroids");
+            destroyShip(ship, enemyService.killedPlayer()
+                    ? "💥 DESTROYED — shot down by an enemy ship"
+                    : "☄ DESTROYED — hull breached by asteroids");
             return;
         }
 
-        // ── 5. Sun and planet collisions (ship radius included) ───────────
+        // ── 6. Sun and planet collisions (ship radius included) ───────────
         double shipR = ShipGeometry.COLLISION_RADIUS;
 
         if (dist(ship, star.getX(), star.getY()) <= star.getRadius() + shipR) {
@@ -178,19 +254,20 @@ public class GameLoop extends AnimationTimer {
             }
         }
 
-        // ── 6. Camera locks onto the ship ─────────────────────────────────
+        // ── 7. Camera locks onto the ship ─────────────────────────────────
         camera.follow(ship.getX(), ship.getY(), dt);
 
-        // ── 7. Render ─────────────────────────────────────────────────────
-        renderer.render(ship, inputHandler.thrustForward());
+        // ── 8. Render ─────────────────────────────────────────────────────
+        renderer.render(ship, engineOn);
 
-        // ── 8. Clear one-frame input flags ────────────────────────────────
+        // ── 9. Clear one-frame input flags ────────────────────────────────
         inputHandler.clearFrameState();
     }
 
-    // One place for every death: pause, then draw a last frame with the overlay
+    // One place for every death: tell the partner, pause, draw a last frame with the overlay
     private void destroyShip(Ship ship, String message) {
         ship.crash();
+        networkService.publishLocal(ship, false);
         gameState.setState(GameState.State.PAUSED);
         System.out.println(message);
         renderer.render(ship, false);

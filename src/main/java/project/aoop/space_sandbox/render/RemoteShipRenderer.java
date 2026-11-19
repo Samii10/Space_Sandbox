@@ -16,9 +16,7 @@ import project.aoop.space_sandbox.network.NetworkService;
 @Component
 public class RemoteShipRenderer {
 
-    private Color partner() {
-        return network.isHost() ? Color.web("#ff6b6b") : Color.web("#6bb6ff");
-    }
+    private static final Color PARTNER = Color.web("#ff9f43");
 
     private final GameCamera     camera;
     private final ShipRenderer   shipRenderer;
@@ -59,7 +57,7 @@ public class RemoteShipRenderer {
     private void drawTag(GraphicsContext gc, double x, double y, String name, int health, boolean dead) {
         gc.setTextAlign(TextAlignment.CENTER);
         gc.setFont(Font.font("Courier New", FontWeight.BOLD, 12));
-        gc.setFill(partner());
+        gc.setFill(PARTNER);
         gc.fillText(dead ? name + "  ✕ DESTROYED" : name, x, y);
 
         if (!dead) {
@@ -89,13 +87,13 @@ public class RemoteShipRenderer {
         gc.save();
         gc.translate(ex, ey);
         gc.rotate(Math.toDegrees(ang));
-        gc.setFill(partner());
+        gc.setFill(PARTNER);
         gc.fillPolygon(new double[]{16, -9, -4, -9}, new double[]{0, -10, 0, 10}, 4);
         gc.restore();
 
         double tx = ex - Math.cos(ang) * 36, ty = ey - Math.sin(ang) * 36;
         gc.setTextAlign(TextAlignment.CENTER);
-        gc.setFill(partner());
+        gc.setFill(PARTNER);
         gc.setFont(Font.font("Courier New", FontWeight.BOLD, 12));
         gc.fillText(dead ? name + " ✕" : name, tx, ty - 2);
         gc.setFill(Color.color(1, 1, 1, 0.6));

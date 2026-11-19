@@ -21,9 +21,9 @@ public class TempMenu {
     private enum Screen { MAIN, COOP, HOSTING, JOINING }
     private enum Action { NEW_GAME, COOP, HOST, JOIN, BACK, CANCEL }
 
-    private record Button(Action action, String label, double x, double y, double w, double h) {
+    private record Button(Action action, String label, double x, double y, double w, double h, boolean enabled) {
         boolean contains(double px, double py) {
-            return px >= x && px <= x + w && py >= y && py <= y + h;
+            return enabled && px >= x && px <= x + w && py >= y && py <= y + h;
         }
     }
 
@@ -105,16 +105,16 @@ public class TempMenu {
 
         switch (screen) {
             case MAIN -> {
-                list.add(new Button(Action.NEW_GAME, "New Game", x, y, bw, bh));
-                list.add(new Button(Action.COOP, "Co-op  (2 players)", x, y + (bh + gap), bw, bh));
+                list.add(new Button(Action.NEW_GAME, "New Game", x, y, bw, bh, true));
+                list.add(new Button(Action.COOP, "Co-op  (unavailable)", x, y + (bh + gap), bw, bh, false));
             }
             case COOP -> {
-                list.add(new Button(Action.HOST, "Host Game", x, y, bw, bh));
-                list.add(new Button(Action.JOIN, "Join Game", x, y + (bh + gap), bw, bh));
-                list.add(new Button(Action.BACK, "Back", x, y + 2 * (bh + gap), bw, bh));
+                list.add(new Button(Action.HOST, "Host Game", x, y, bw, bh, true));
+                list.add(new Button(Action.JOIN, "Join Game", x, y + (bh + gap), bw, bh, true));
+                list.add(new Button(Action.BACK, "Back", x, y + 2 * (bh + gap), bw, bh, true));
             }
             case HOSTING, JOINING ->
-                    list.add(new Button(Action.CANCEL, "Cancel", x, H * 0.64, bw, bh));
+                    list.add(new Button(Action.CANCEL, "Cancel", x, H * 0.64, bw, bh, true));
         }
         return list;
     }
@@ -135,12 +135,15 @@ public class TempMenu {
         double mx = input.getMouseX(), my = input.getMouseY();
         for (Button b : buttons(W, H)) {
             boolean hover = b.contains(mx, my);
-            gc.setFill(hover ? Color.color(0.30, 1.0, 0.80, 0.18) : Color.color(1, 1, 1, 0.06));
+            gc.setFill(!b.enabled() ? Color.color(1, 1, 1, 0.03)
+                    : hover ? Color.color(0.30, 1.0, 0.80, 0.18) : Color.color(1, 1, 1, 0.06));
             gc.fillRoundRect(b.x(), b.y(), b.w(), b.h(), 12, 12);
-            gc.setStroke(hover ? Color.color(0.30, 1.0, 0.80, 0.8) : Color.color(1, 1, 1, 0.18));
+            gc.setStroke(!b.enabled() ? Color.color(1, 1, 1, 0.08)
+                    : hover ? Color.color(0.30, 1.0, 0.80, 0.8) : Color.color(1, 1, 1, 0.18));
             gc.setLineWidth(1.5);
             gc.strokeRoundRect(b.x(), b.y(), b.w(), b.h(), 12, 12);
-            gc.setFill(hover ? Color.web("#4dffc8") : Color.color(1, 1, 1, 0.9));
+            gc.setFill(!b.enabled() ? Color.color(1, 1, 1, 0.35)
+                    : hover ? Color.web("#4dffc8") : Color.color(1, 1, 1, 0.9));
             gc.setFont(Font.font("Courier New", FontWeight.BOLD, 18));
             gc.fillText(b.label(), b.x() + b.w() / 2, b.y() + b.h() / 2 + 6);
         }

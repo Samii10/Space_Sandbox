@@ -2,6 +2,8 @@ package project.aoop.space_sandbox.entity;
 
 public class Bullet {
 
+    public enum Team { PLAYER, ENEMY }
+
     private static final double FADE_IN  = 0.08;
     private static final double FADE_OUT = 0.45;
 
@@ -12,9 +14,11 @@ public class Bullet {
     private final double  maxLifetime;
     private final boolean laser;
     private final double  chargeLevel;     // 0..1, lasers only
-
+    private boolean remote = false;
+    private Team team = Team.PLAYER;
     private final double maxBeamLength;    // world units
     private double beamLength;             // current length, shortened when blocked
+    private int damage = 0;
 
     private Bullet(double x, double y, double vx, double vy, double angle,
                    double lifetime, boolean laser, double chargeLevel) {
@@ -33,6 +37,13 @@ public class Bullet {
     public static Bullet plasma(double x, double y, double vx, double vy,
                                 double angle, double lifetime) {
         return new Bullet(x, y, vx, vy, angle, lifetime, false, 0);
+    }
+
+    public static Bullet enemyPlasma(double x, double y, double vx, double vy,
+                                     double angle, double lifetime) {
+        Bullet b = plasma(x, y, vx, vy, angle, lifetime);
+        b.team = Team.ENEMY;
+        return b;
     }
 
     /** Charged laser: a beam attached to the laser barrel for charge% x 10 seconds. */
@@ -86,4 +97,10 @@ public class Bullet {
     public double  getVy()            { return vy; }
     public double  getAngle()         { return angle; }
     public double  getLifetime()      { return lifetime; }
+    public Team    getTeam()          { return team; }
+    public boolean isEnemy()          { return team == Team.ENEMY; }
+    public Bullet markRemote()        { this.remote = true; return this; }
+    public boolean isRemote()         { return remote; }
+    public Bullet withDamage(int d)   { this.damage = d; return this; }
+    public int  getDamage()           { return damage; }
 }

@@ -182,8 +182,11 @@ public class NetworkService {
 
                 pendingLevel = reply.i(1);
                 s.setSoTimeout(0);
-                adopt(s, r, w);
-                Platform.runLater(onConnected);
+                if (adopt(s, r, w)) {
+                    Platform.runLater(() -> {
+                        if (isSessionOpen(Mode.CLIENT)) onConnected.run();
+                    });
+                }
             } catch (SocketTimeoutException e) {
                 setupFailed(s, onError, "No answer from the host. Same Wi-Fi? A firewall may be blocking port " + PORT + ".");
             } catch (IOException | RuntimeException e) {
@@ -339,7 +342,9 @@ public class NetworkService {
                 }
                 if (handshakeAsHost(s)) {
                     notice("Partner joined");
-                    Platform.runLater(onPartnerJoined);
+                    Platform.runLater(() -> {
+                        if (isSessionOpen(Mode.HOST)) onPartnerJoined.run();
+                    });
                 }
             } catch (IOException | RuntimeException e) {
                 closeQuietly(s);
@@ -366,8 +371,7 @@ public class NetworkService {
 
         writeNow(w, Msg.of(MessageType.WELCOME, PROTOCOL, hostLevelMirror));
         s.setSoTimeout(0);
-        adopt(s, r, w);
-        return true;
+        return adopt(s, r, w);
     }
 
     private void refuse(Socket s) {
@@ -381,9 +385,9 @@ public class NetworkService {
     }
 
     // start the three connection threads once the handshake is done
-    private void adopt(Socket s, BufferedReader r, BufferedWriter w) {
+    private boolean adopt(Socket s, BufferedReader r, BufferedWriter w) {
         synchronized (lock) {
-            if (closed.get()) { closeQuietly(s); return; }
+            if (closed.get()) { closeQuietly(s); return false; }
             socket = s;
             in = r;
             out = w;
@@ -392,6 +396,7 @@ public class NetworkService {
             pool.execute(this::readLoop);
             pool.execute(this::writeLoop);
             ticker.scheduleAtFixedRate(this::tick, 0, TICK_MS, TimeUnit.MILLISECONDS);
+            return true;
         }
     }
 
@@ -530,8 +535,13 @@ public class NetworkService {
 
     private void setupFailed(Socket s, Consumer<String> onError, String message) {
         closeQuietly(s);
-        shutdownSession();
-        Platform.runLater(() -> onError.accept(message));
+        if (shutdownSession()) {
+            Platform.runLater(() -> onError.accept(message));
+        }
+    }
+
+    private boolean isSessionOpen(Mode expectedMode) {
+        return !closed.get() && mode == expectedMode;
     }
 
     private void notice(String text) {
